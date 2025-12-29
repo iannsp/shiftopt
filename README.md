@@ -89,7 +89,7 @@ make clean
 # 4. Run tests
 make test
 
---------------
+
 📂 Project Structure
 We follow the standard Go project layout:
 .
@@ -101,4 +101,13 @@ We follow the standard Go project layout:
 │   └── scheduler/   # The Optimization Algorithms
 ├── bin/             # Compiled artifacts (Ignored by Git)
 └── Makefile         # Build automation
+
+```
+
+### Topics 
+
+1.  Combinatorial Optimization Problem
+2.  Monte Carlo-style simulation
+3.  Operational Constraints 
+4.  The Roadmap.
 
