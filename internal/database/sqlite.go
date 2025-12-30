@@ -28,9 +28,24 @@ func InitDB() (*sql.DB, error) {
 		hour_of_day INTEGER,
 		needed INTEGER
 	);
+	CREATE TABLE IF NOT EXISTS unavailability (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		employee_id INTEGER,
+		start_hour INTEGER,
+		end_hour INTEGER,
+		reason TEXT,
+		FOREIGN KEY(employee_id) REFERENCES employees(id)
+	);
 	`
 	_, err = db.Exec(schema)
 	return db, err
+}
+
+// AddUnavailability allows us to block specific slots
+func AddUnavailability(db *sql.DB, empID, start, end int, reason string) error {
+	_, err := db.Exec("INSERT INTO unavailability (employee_id, start_hour, end_hour, reason) VALUES (?, ?, ?, ?)",
+		empID, start, end, reason)
+	return err
 }
 
 func SeedData(db *sql.DB) {
