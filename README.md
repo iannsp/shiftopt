@@ -53,7 +53,7 @@ We are following an evolutionary development path:
     - [x] Clean Architecture (`cmd/` vs `internal/`).
 
 - [ ] **Phase 2: The "Real" World (Constraints)**
-    - [ ] Implement hard constraints (e.g., "Max 8 hours/day", "Must have 1 Manager on site").
+    - [x] Implement hard constraints (e.g., "Max 8 hours/day", "Must have 1 Manager on site").
     - [ ] Refactor algorithm to handle backtracking or penalty scoring.
 
 - [ ] **Phase 3: AI Integration**

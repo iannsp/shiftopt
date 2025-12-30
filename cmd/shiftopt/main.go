@@ -16,7 +16,7 @@ func main() {
 	// For now, let's assume we always simulate a new day.
 	database.SeedData(db)
 
-	roster, err := scheduler.RunSafeSchedule(db)
+	roster, err := scheduler.RunTetrisSchedule(db)
 	if err != nil { log.Fatal(err) }
 
 	// The Goal: Deliver the CSV
