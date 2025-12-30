@@ -13,7 +13,7 @@ import (
 )
 
 func main() {
-	db, err := database.InitDB()
+	db, err := database.InitDB("shiftopt.db")
 	if err != nil { log.Fatal(err) }
 	defer db.Close()
 	database.SeedData(db)

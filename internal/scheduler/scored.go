@@ -8,11 +8,11 @@ import (
 	"github.com/iannsp/shiftopt/internal/models"
 )
 
-// RunSmartTetris uses Penalty Scoring to optimize skill usage
+// RunSmartTetris uses Penalty Scoring to optimize skill usage AND respects Availability
 func RunSmartTetris(db *sql.DB) (*models.Roster, error) {
 	fmt.Println("\n--- Generating Smart Tetris Schedule (Penalty Scoring) ---")
 
-	// 1. Fetch Data
+	// 1. Fetch Employees
 	rows, _ := db.Query("SELECT id, name, hourly_rate, skill_level FROM employees")
 	var employees []models.Employee
 	for rows.Next() {
@@ -22,6 +22,27 @@ func RunSmartTetris(db *sql.DB) (*models.Roster, error) {
 	}
 	rows.Close()
 
+	// 1.5 Fetch Unavailability (The Missing Link)
+	// Map: EmployeeID -> Map[Hour] -> IsBlocked
+	blocked := make(map[int]map[int]bool)
+	uRows, err := db.Query("SELECT employee_id, start_hour, end_hour FROM unavailability")
+	if err == nil {
+		for uRows.Next() {
+			var empID, start, end int
+			uRows.Scan(&empID, &start, &end)
+			
+			if blocked[empID] == nil {
+				blocked[empID] = make(map[int]bool)
+			}
+			// Block every hour in the range [start, end)
+			for h := start; h < end; h++ {
+				blocked[empID][h] = true
+			}
+		}
+		uRows.Close()
+	}
+
+	// 2. Fetch Demands
 	dRows, _ := db.Query("SELECT hour_of_day, needed FROM demands ORDER BY hour_of_day")
 	var sortedHours []int
 	demands := make(map[int]int)
@@ -39,14 +60,12 @@ func RunSmartTetris(db *sql.DB) (*models.Roster, error) {
 
 	const MinBlock = 4
 	const MaxDaily = 8
-
-	// --- PENALTY CONFIGURATION ---
 	const (
-		PenaltySafetyMissing = 1000.0 // Huge penalty if we pick a Junior when we need a Senior
-		PenaltySeniorWaste   = 50.0   // Medium penalty if we pick a Senior when we don't need one
+		PenaltySafetyMissing = 1000.0
+		PenaltySeniorWaste   = 50.0
 	)
 
-	// 2. The Loop
+	// 3. The Loop
 	for _, hour := range sortedHours {
 		needed := demands[hour]
 
@@ -57,9 +76,8 @@ func RunSmartTetris(db *sql.DB) (*models.Roster, error) {
 
 		for _, emp := range employees {
 			if shiftEnd[emp.ID] > hour {
-				// This person is working this hour
+				// Already working
 				isSenior := (emp.SkillLevel >= 2)
-				
 				roster.Assignments = append(roster.Assignments, models.Assignment{
 					Hour: hour, Employee: emp, IsSenior: isSenior,
 				})
@@ -74,13 +92,11 @@ func RunSmartTetris(db *sql.DB) (*models.Roster, error) {
 			}
 		}
 
-		// B. Spawn Blocks based on Score
+		// B. Spawn Blocks
 		deficit := needed - activeCount
 		if deficit > 0 {
 			for i := 0; i < deficit; i++ {
 				
-				// --- THE SCORING ENGINE ---
-				// We re-evaluate candidates for THIS specific slot
 				type Candidate struct {
 					Emp   models.Employee
 					Score float64
@@ -88,49 +104,59 @@ func RunSmartTetris(db *sql.DB) (*models.Roster, error) {
 				var candidates []Candidate
 
 				for _, emp := range employees {
-					// 1. Hard Constraints (Availability/Max Hours)
+					// --- HARD CONSTRAINTS ---
+					
+					// 1. Is already working?
 					if activeStaff[emp.ID] { continue }
+					
+					// 2. Will bust 8-hour limit?
 					if hoursWorkedTotal[emp.ID]+MinBlock > MaxDaily { continue }
 
-					// 2. Calculate Score
-					score := emp.HourlyRate // Start with Base Cost
+					// 3. **AVAILABILITY CHECK** (The Fix)
+					// Check if ANY hour in the proposed block (hour -> hour+4) is blocked
+					isBlocked := false
+					for b := 0; b < MinBlock; b++ {
+						// Logic: If blocked[Alice][09:00] is true, she cannot take a shift starting at 09:00
+						// We check hour, hour+1, hour+2, hour+3
+						if blocked[emp.ID][hour+b] {
+							isBlocked = true
+							break
+						}
+					}
+					if isBlocked { continue }
+
+
+					// --- SOFT CONSTRAINTS (SCORING) ---
+					score := emp.HourlyRate
 
 					if !seniorPresent {
-						// Context: We URGENTLY need a Senior for safety
 						if emp.SkillLevel < 2 {
-							score += PenaltySafetyMissing // "Don't pick this Junior!"
+							score += PenaltySafetyMissing
 						}
-						// Seniors get no penalty (score = base rate), so they win
 					} else {
-						// Context: Safety is already handled. We just need bodies.
 						if emp.SkillLevel >= 2 {
-							score += PenaltySeniorWaste // "Save this Senior for later!"
+							score += PenaltySeniorWaste
 						}
-						// Juniors get no penalty, so they win
 					}
 
 					candidates = append(candidates, Candidate{Emp: emp, Score: score})
 				}
 
-				// 3. Sort by Score (Lowest wins)
+				// Sort and Assign
 				sort.Slice(candidates, func(i, j int) bool {
 					return candidates[i].Score < candidates[j].Score
 				})
 
-				// 4. Assign the Winner
 				if len(candidates) > 0 {
 					winner := candidates[0].Emp
-					
 					shiftEnd[winner.ID] = hour + MinBlock
 					
-					// Record assignments
 					isSenior := (winner.SkillLevel >= 2)
 					roster.Assignments = append(roster.Assignments, models.Assignment{
 						Hour: hour, Employee: winner, IsSenior: isSenior,
 					})
 					roster.TotalCost += winner.HourlyRate
 					hoursWorkedTotal[winner.ID]++
-
 					activeStaff[winner.ID] = true
 					if isSenior {
 						seniorPresent = true

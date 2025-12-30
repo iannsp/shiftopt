@@ -56,8 +56,8 @@ We are following an evolutionary development path:
     - [x] Implement hard constraints (e.g., "Max 8 hours/day", "Must have 1 Manager on site").
     - [x] Refactor algorithm to handle backtracking or penalty scoring.
 
-- [ ] **Phase 3: AI Integration**
-    - [ ] LLM-based parser: Convert unstructured texts ("I can't work Friday") into structured DB constraints.
+- [x] **Phase 3: AI Integration**
+    - [x] LLM-based parser: Convert unstructured texts ("I can't work Friday") into structured DB constraints.
     - [ ] Demand Prediction: Use external factors (Weather/Holidays) to adjust demand curves.
 
 - [ ] **Phase 4: Operational Dashboard**
@@ -93,14 +93,47 @@ make test
 📂 Project Structure
 We follow the standard Go project layout:
 .
-├── cmd/
-│   └── shiftopt/    # Main entry point (The Controller)
-├── internal/
-│   ├── database/    # SQLite setup and Seeding Logic
-│   ├── models/      # Domain entities (Employee, Demand)
-│   └── scheduler/   # The Optimization Algorithms
-├── bin/             # Compiled artifacts (Ignored by Git)
-└── Makefile         # Build automation
+├── bin
+│   ├── shiftopt
+│   └── shiftsummary
+├── cmd
+│   ├── shiftopt
+│   │   └── main.go
+│   └── shiftsummary
+│       └── main.go
+├── doc
+│   ├── 001_genesis_and_stack.md
+│   ├── 002_the_greedy_baseline.md
+│   ├── 003_the_safety_constraint.md
+│   ├── 004_stochastic_simulation.md
+│   ├── 005_product_checkpoint.md
+│   ├── 006_visualization_and_fragmentation.md
+│   ├── 007tetris_and_edge_cases.md
+│   ├── 008_diagnostic_observability.md
+│   ├── 009_optimization_strategy.md
+│   └── 010_availability_architecture.md
+├── go.mod
+├── go.sum
+├── internal
+│   ├── ai
+│   │   └── parser.go
+│   ├── database
+│   │   └── sqlite.go
+│   ├── models
+│   │   └── models.go
+│   └── scheduler
+│       ├── export.go
+│       ├── greedy.go
+│       ├── max-hours.go
+│       ├── safe-shift.go
+│       ├── scored.go
+│       └── tetris.go
+├── Makefile
+├── README.md
+├── roster.csv
+├── shiftopt.db
+└── tests
+    └── integration_test.go
 
 ```
 

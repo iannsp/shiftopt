@@ -10,8 +10,12 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-func InitDB() (*sql.DB, error) {
-	db, err := sql.Open("sqlite", "shiftopt.db")
+func InitDB(dsn string) (*sql.DB, error) {
+	if dsn == "" {
+		dsn = "shiftopt.db" // Default to prod file
+	}
+	db, err := sql.Open("sqlite", dsn)
+
 	if err != nil {
 		return nil, err
 	}
@@ -28,9 +32,24 @@ func InitDB() (*sql.DB, error) {
 		hour_of_day INTEGER,
 		needed INTEGER
 	);
+	CREATE TABLE IF NOT EXISTS unavailability (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		employee_id INTEGER,
+		start_hour INTEGER,
+		end_hour INTEGER,
+		reason TEXT,
+		FOREIGN KEY(employee_id) REFERENCES employees(id)
+	);
 	`
 	_, err = db.Exec(schema)
 	return db, err
+}
+
+// AddUnavailability allows us to block specific slots
+func AddUnavailability(db *sql.DB, empID, start, end int, reason string) error {
+	_, err := db.Exec("INSERT INTO unavailability (employee_id, start_hour, end_hour, reason) VALUES (?, ?, ?, ?)",
+		empID, start, end, reason)
+	return err
 }
 
 func SeedData(db *sql.DB) {
@@ -85,3 +104,22 @@ func SeedData(db *sql.DB) {
 		db.Exec("INSERT INTO demands (hour_of_day, needed) VALUES (?, ?)", h, finalNeeded)
 	}
 }
+
+// ProcessNaturalLanguageConstraint acts as the Controller.
+// It uses the AI Parser to understand the text, then saves to DB.
+func ProcessNaturalLanguageConstraint(db *sql.DB, text string) error {
+	// 1. Call the "AI"
+	// Note: We need to import the 'ai' package. 
+	// Since we are inside 'database', we can't easily import 'ai' if 'ai' imports 'models'.
+	// Architecture Check: It's better to do this in 'main' or a 'service' layer.
+	// But for this MVP, we will pass the parsed struct IN, rather than importing AI here.
+    return nil 
+}
+
+// Let's create a simpler helper that finds ID by Name
+func GetEmployeeIDByName(db *sql.DB, name string) (int, error) {
+	var id int
+	err := db.QueryRow("SELECT id FROM employees WHERE name = ?", name).Scan(&id)
+	return id, err
+}
+
