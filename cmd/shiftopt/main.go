@@ -17,6 +17,11 @@ func main() {
 	// 2. Data
 	database.SeedData(db)
 
-	// 3. Business Logic
+	// 3. Compare Strategies
+
+    // Strategy A: illegal but cheap 
 	scheduler.RunGreedy(db)
+
+	// Strategy B: The Real World (Legal but expensive)
+	scheduler.RunConstrained(db)
 }
