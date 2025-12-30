@@ -3,7 +3,8 @@ package database
 import (
 	"database/sql"
 	"fmt"
-_	"log"
+	"math/rand"
+	"time"
 
 	"github.com/iannsp/shiftopt/internal/models"
 	_ "modernc.org/sqlite"
@@ -33,27 +34,54 @@ func InitDB() (*sql.DB, error) {
 }
 
 func SeedData(db *sql.DB) {
+	// 1. Initialize the Random Source based on current time
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+
 	db.Exec("DELETE FROM employees; DELETE FROM demands;")
 
+	// 2. Employees (We keep this pool stable for now, representing "Fixed Staff")
 	employees := []models.Employee{
 		{Name: "Alice (Vet)", HourlyRate: 50.0, SkillLevel: 2},
 		{Name: "Bob (Vet)", HourlyRate: 55.0, SkillLevel: 2},
-		{Name: "Charlie (Jun)", HourlyRate: 20.0, SkillLevel: 1},
-		{Name: "Dave (Jun)", HourlyRate: 22.0, SkillLevel: 1},
-		{Name: "Eve (Grinder)", HourlyRate: 30.0, SkillLevel: 1},
+		{Name: "Carol (Vet)", HourlyRate: 52.0, SkillLevel: 2}, // Added one more Senior
+		{Name: "Dave (Jun)", HourlyRate: 20.0, SkillLevel: 1},
+		{Name: "Eve (Jun)", HourlyRate: 22.0, SkillLevel: 1},
+		{Name: "Frank (Jun)", HourlyRate: 21.0, SkillLevel: 1},
+		{Name: "Grace (Grinder)", HourlyRate: 30.0, SkillLevel: 1},
+		{Name: "Hank (Grinder)", HourlyRate: 32.0, SkillLevel: 1},
 	}
 
 	for _, e := range employees {
 		db.Exec("INSERT INTO employees (name, hourly_rate, skill_level) VALUES (?, ?, ?)", e.Name, e.HourlyRate, e.SkillLevel)
 	}
 
-	hours := []int{9, 10, 11, 12, 13, 14, 15, 16, 17}
-	for _, h := range hours {
-		needed := 2
-		if h == 12 || h == 13 {
-			needed = 4 
+	// 3. Generate Randomized Demand (08:00 to 20:00)
+	// Logic: Base Curve (Lunch Peak) + Random Noise
+	fmt.Println("Seeding Randomized Demand Curve (Sine + Noise)...")
+	
+	for h := 8; h <= 20; h++ {
+		baseNeeded := 2
+
+		// The "Lunch Rush" Pattern
+		if h >= 11 && h <= 14 {
+			baseNeeded = 5
 		}
-		db.Exec("INSERT INTO demands (hour_of_day, needed) VALUES (?, ?)", h, needed)
+		// The "Dinner Rush" Pattern
+		if h >= 18 && h <= 20 {
+			baseNeeded = 4
+		}
+
+		// Inject Noise: Randomly add -1 to +2 staff needed
+		// This simulates unexpected busloads of customers or quiet days
+		noise := rng.Intn(4) - 1 // Generates: -1, 0, 1, or 2
+		
+		finalNeeded := baseNeeded + noise
+		
+		// Safety floor: Always need at least 1 person
+		if finalNeeded < 1 {
+			finalNeeded = 1
+		}
+
+		db.Exec("INSERT INTO demands (hour_of_day, needed) VALUES (?, ?)", h, finalNeeded)
 	}
-	fmt.Println("Database seeded.")
 }
