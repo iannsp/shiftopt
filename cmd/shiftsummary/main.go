@@ -14,132 +14,134 @@ import (
 
 func main() {
 	db, err := database.InitDB()
-	if err != nil {
-		log.Fatal(err)
-	}
+	if err != nil { log.Fatal(err) }
 	defer db.Close()
-
 	database.SeedData(db)
 
 	fmt.Println("========================================")
 	fmt.Println("   SHIFTOPT DIAGNOSTIC SUMMARY")
 	fmt.Println("========================================")
 
-	// 0. The Context (Demand + Supply)
-	printDemandCurve(db)
+	// 1. Context: The Workforce
 	printCrewStats(db)
 
-	// 1. Run Strategy A
+	// 2. Execution: Run All 3 Strategies
+	// A. Baseline
 	rosterHourly, err := scheduler.RunSafeSchedule(db)
-	if err != nil {
-		log.Fatal(err)
-	}
-	printStats("Strategy A: Hourly (Fragmented)", rosterHourly)
+	if err != nil { log.Fatal(err) }
 
-	// 2. Run Strategy B
+	// B. Block Logic (Dumb)
 	rosterTetris, err := scheduler.RunTetrisSchedule(db)
-	if err != nil {
-		log.Fatal(err)
-	}
-	printStats("Strategy B: Tetris (Continuous)", rosterTetris)
+	if err != nil { log.Fatal(err) }
 
-	// 3. Comparison
-	diff := rosterTetris.TotalCost - rosterHourly.TotalCost
-	percent := 0.0
-	if rosterHourly.TotalCost > 0 {
-		percent = (diff / rosterHourly.TotalCost) * 100
-	}
+	// C. Scored Logic (Smart)
+	rosterSmart, err := scheduler.RunSmartTetris(db)
+	if err != nil { log.Fatal(err) }
 
-	fmt.Println("\n----------------------------------------")
-	fmt.Println("   OPERATIONAL IMPACT ANALYSIS")
-	fmt.Println("----------------------------------------")
+	// 3. Visualization: Inspect the "Smart" Roster deeply
+	printVisualDistribution(db, rosterSmart)
+
+	// 4. Comparison: The Numbers
+	fmt.Println("\n[Strategy Showdown: Cost vs. Coverage]")
+	printSummaryRow("1. Hourly (Fragmented)", rosterHourly)
+	printSummaryRow("2. Tetris (Basic Block)", rosterTetris)
+	printSummaryRow("3. Smart  (Scored Block)", rosterSmart)
+
+	// 5. The "Smart" Delta Analysis
+	diff := rosterTetris.TotalCost - rosterSmart.TotalCost
+	fmt.Println("\n[Optimization Analysis]")
 	if diff > 0 {
-		fmt.Printf("Cost of Continuity: +$%.2f (+%.1f%%)\n", diff, percent)
-		fmt.Println(">> This is the 'Premium' we pay to give staff 4-hour blocks.")
+		fmt.Printf(">> SUCCESS: Scoring Engine saved $%.2f compared to basic Tetris.\n", diff)
+		fmt.Println("   (Optimized usage of Seniors during low-risk hours)")
+	} else if diff < 0 {
+		fmt.Printf(">> NOTE: Smart Engine cost $%.2f MORE than basic Tetris.\n", -diff)
+		fmt.Println("   (Likely forced expensive Seniors to cover Safety gaps that Basic missed)")
 	} else {
-		fmt.Printf("Cost Difference: $%.2f\n", diff)
-		fmt.Println(">> Tetris was more efficient. Check for unfilled shifts.")
+		fmt.Println(">> NEUTRAL: No cost difference. Workforce Constraints were loose.")
 	}
 }
 
-func printDemandCurve(db *sql.DB) {
-	fmt.Println("\n[Demand Curve (The Problem)]")
-	rows, _ := db.Query("SELECT hour_of_day, needed FROM demands ORDER BY hour_of_day")
-	defer rows.Close()
+// --- VISUALIZATION HELPERS ---
 
-	totalNeeded := 0
+func printVisualDistribution(db *sql.DB, roster *models.Roster) {
+	fmt.Println("\n[Smart Schedule Composition]")
+	fmt.Println("Legend: [V]eteran, [J]unior, [G]rinder, [_]Missed")
+
+	// Get Demands
+	demands := make(map[int]int)
+	rows, _ := db.Query("SELECT hour_of_day, needed FROM demands")
+	var hours []int
 	for rows.Next() {
 		var h, n int
 		rows.Scan(&h, &n)
-		totalNeeded += n
-
-		// ASCII Bar Chart
-		bar := strings.Repeat("█", n) 
-		// If font doesn't support block, use "*"
-		// bar := strings.Repeat("*", n) 
-
-		fmt.Printf("  %02d:00 | %s (%d)\n", h, bar, n)
+		demands[h] = n
+		hours = append(hours, h)
 	}
-	fmt.Printf("  Total Man-Hours Required: %d\n", totalNeeded)
+	rows.Close()
+	sort.Ints(hours)
+
+	// Map Roster
+	allocations := make(map[int][]string)
+	for _, a := range roster.Assignments {
+		char := "J"
+		if strings.Contains(a.Employee.Name, "(Vet)") {
+			char = "V"
+		} else if strings.Contains(a.Employee.Name, "(Grinder)") {
+			char = "G"
+		}
+		allocations[a.Hour] = append(allocations[a.Hour], char)
+	}
+
+	// Render
+	for _, h := range hours {
+		needed := demands[h]
+		staff := allocations[h]
+		
+		// Sort: V -> G -> J
+		sort.Slice(staff, func(i, j int) bool {
+			order := map[string]int{"V": 0, "G": 1, "J": 2}
+			return order[staff[i]] < order[staff[j]]
+		})
+
+		var barBuilder strings.Builder
+		for _, c := range staff {
+			barBuilder.WriteString("[" + c + "]")
+		}
+		
+		missing := needed - len(staff)
+		if missing > 0 {
+			for i := 0; i < missing; i++ {
+				barBuilder.WriteString("[_]")
+			}
+		}
+
+		fmt.Printf("  %02d:00 | %-25s (Target: %d)\n", h, barBuilder.String(), needed)
+	}
+}
+
+// --- STATS HELPERS ---
+
+func printSummaryRow(label string, r *models.Roster) {
+	assigned := len(r.Assignments)
+	totalNeeded := assigned + r.Unfilled
+	
+	// Create a status string
+	status := "OK"
+	if r.Unfilled > 0 {
+		status = fmt.Sprintf("MISSING %d", r.Unfilled)
+	}
+
+	fmt.Printf("  %-25s | Cost: $%7.2f | Cov: %d/%d | %s\n", 
+		label, r.TotalCost, assigned, totalNeeded, status)
 }
 
 func printCrewStats(db *sql.DB) {
-	fmt.Println("\n[Workforce Profile (The Supply)]")
-	
+	fmt.Println("\n[Workforce Supply]")
 	var total, seniors, juniors int
 	var avgCost float64
-
 	db.QueryRow("SELECT COUNT(*) FROM employees").Scan(&total)
 	db.QueryRow("SELECT COUNT(*) FROM employees WHERE skill_level >= 2").Scan(&seniors)
 	db.QueryRow("SELECT COUNT(*) FROM employees WHERE skill_level = 1").Scan(&juniors)
 	db.QueryRow("SELECT AVG(hourly_rate) FROM employees").Scan(&avgCost)
-
-	fmt.Printf("  Total Headcount: %d\n", total)
-	fmt.Printf("  Composition:     %d Seniors / %d Juniors\n", seniors, juniors)
-	fmt.Printf("  Avg Hourly Rate: $%.2f/hr\n", avgCost)
-	
-	if seniors == 0 {
-		fmt.Println("  WARNING: No Seniors in pool! Safety constraints will fail.")
-	}
-}
-
-func printStats(name string, roster *models.Roster) {
-	fmt.Printf("\n[%s]\n", name)
-	fmt.Printf("  Total Cost:      $%.2f\n", roster.TotalCost)
-	
-	assigned := len(roster.Assignments)
-	totalNeeded := assigned + roster.Unfilled
-	coveragePct := 0.0
-	if totalNeeded > 0 {
-		coveragePct = (float64(assigned) / float64(totalNeeded)) * 100
-	}
-
-	fmt.Printf("  Shifts Assigned: %d / %d (%.1f%%)\n", assigned, totalNeeded, coveragePct)
-	
-	uniqueStaff := make(map[int]bool)
-	for _, a := range roster.Assignments {
-		uniqueStaff[a.Employee.ID] = true
-	}
-	fmt.Printf("  Staff Utilized:  %d people\n", len(uniqueStaff))
-
-	if roster.Unfilled > 0 {
-		fmt.Printf("  CRITICAL:        %d Unfilled Shifts\n", roster.Unfilled)
-	}
-
-	fmt.Println("  Staff Hours:")
-	hoursPerPerson := make(map[string]int)
-	var names []string
-
-	for _, a := range roster.Assignments {
-		if _, exists := hoursPerPerson[a.Employee.Name]; !exists {
-			names = append(names, a.Employee.Name)
-		}
-		hoursPerPerson[a.Employee.Name]++
-	}
-	sort.Strings(names) 
-
-	for _, name := range names {
-		hours := hoursPerPerson[name]
-		fmt.Printf("    - %-15s: %d hrs\n", name, hours)
-	}
+	fmt.Printf("  Headcount: %d (%d Seniors, %d Juniors)\n", total, seniors, juniors)
 }
