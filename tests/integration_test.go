@@ -59,8 +59,10 @@ func TestAIConstraintIntegration(t *testing.T) {
 			// A. Clean State (Reset DB for every scenario)
 			database.SeedData(db)
 
-			// B. The AI Step
+			// B. The AI Step using Mock
 			constraint := ai.MockParse(tc.inputText)
+            // the AI Step using Gemini
+			//constraint := ai.ParseConstraint(tc.inputText)
 			
 			// Verify AI Parsing
 			if constraint.EmployeeName != tc.expectedEmp {

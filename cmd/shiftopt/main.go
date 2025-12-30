@@ -25,7 +25,7 @@ func main() {
 	fmt.Printf("\n[Input] SMS Received: %q\n", incomingText)
 	
 	// 1. Parse
-	constraint := ai.MockParse(incomingText)
+	constraint := ai.ParseConstraint(incomingText)
 	fmt.Printf("[AI] Parsed: Who=%s, When=%d:00-%d:00, Why=%s\n", 
 		constraint.EmployeeName, constraint.StartHour, constraint.EndHour, constraint.Reason)
 
