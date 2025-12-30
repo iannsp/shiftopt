@@ -4,10 +4,12 @@ BUILD_DIR=bin
 CMD_PATH=cmd/shiftopt/main.go
 
 # .PHONY tells Make that these are commands, not actual files
-.PHONY: all build run clean test help
+.PHONY: all build clean test help
 
-# Default target: just typing 'make' will run the app
-.DEFAULT_GOAL := run
+# Default: Build Both
+
+
+all: build
 
 help: ## Show this help message
 	@echo 'Usage:'
@@ -16,20 +18,29 @@ help: ## Show this help message
 	@echo '  make clean    - Remove binary and local database'
 	@echo '  make test     - Run unit tests'
 
-build: ## Compile the application
-	@echo "Building $(BINARY_NAME)..."
+
+build:
+	@echo "Building ShiftOpt (CSV Generator)..."
 	@mkdir -p $(BUILD_DIR)
-	@go build -o $(BUILD_DIR)/$(BINARY_NAME) $(CMD_PATH)
-	@echo "Build Success! Binary is at $(BUILD_DIR)/$(BINARY_NAME)"
+	@go build -o $(BUILD_DIR)/shiftopt cmd/shiftopt/main.go
+	
+	@echo "Building ShiftSummary (Diagnostic Tool)..."
+	@go build -o $(BUILD_DIR)/shiftsummary cmd/shiftsummary/main.go
+	
+	@echo "Build Complete. Artifacts in $(BUILD_DIR)/"
 
-run: build 
-	@./$(BUILD_DIR)/$(BINARY_NAME)
+# Run the summary by default
+run: build
+	@./$(BUILD_DIR)/shiftsummary
 
-clean: ## Clean up build artifacts and reset the DB
-	@echo "Cleaning..."
+# Run the export
+export: build
+	@./$(BUILD_DIR)/shiftopt
+
+clean:
 	@rm -rf $(BUILD_DIR)
 	@rm -f *.db
-	@echo "Clean complete."
+	@rm -f *.csv
 
-test: ## Run all tests in the project
+test:
 	@go test ./... -v

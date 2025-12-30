@@ -21,3 +21,20 @@ type SchedulePlan struct {
 	Employee  string
 	Cost      float64
 }
+
+
+// Assignment represents one person working one hour
+type Assignment struct {
+	Hour      int
+	Employee  Employee
+	IsSenior  bool // Tracks if this person was the "Safety" hire
+}
+
+// Roster holds the complete plan for the day
+type Roster struct {
+	Assignments []Assignment
+	TotalCost   float64
+	Unfilled    int
+}
+
+

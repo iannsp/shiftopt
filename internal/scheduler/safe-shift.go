@@ -2,17 +2,13 @@ package scheduler
 
 import (
 	"database/sql"
-	"fmt"
 	"sort"
 
 	"github.com/iannsp/shiftopt/internal/models"
 )
 
-
-// RunSafeSchedule adds "Max 8h" AND "Min 1 Senior" constraints
-func RunSafeSchedule(db *sql.DB) {
-	fmt.Println("\n--- Running Safety Net Scheduler (Max 8h + 1 Senior) ---")
-
+// RunSafeSchedule returns a Roster object instead of printing
+func RunSafeSchedule(db *sql.DB) (*models.Roster, error) {
 	// 1. Fetch & Sort Employees
 	rows, _ := db.Query("SELECT id, name, hourly_rate, skill_level FROM employees")
 	var employees []models.Employee
@@ -23,7 +19,6 @@ func RunSafeSchedule(db *sql.DB) {
 	}
 	rows.Close()
 
-	// Sort by Cost (Cheapest first)
 	sort.Slice(employees, func(i, j int) bool {
 		return employees[i].HourlyRate < employees[j].HourlyRate
 	})
@@ -31,69 +26,55 @@ func RunSafeSchedule(db *sql.DB) {
 	// 2. Fetch Demands
 	dRows, _ := db.Query("SELECT hour_of_day, needed FROM demands ORDER BY hour_of_day")
 	
-	totalCost := 0.0
+	roster := &models.Roster{
+		Assignments: []models.Assignment{},
+	}
+	
 	hoursWorked := make(map[int]int)
 	const MaxDailyHours = 8
-	unassignedShifts := 0
 
 	for dRows.Next() {
 		var hour, needed int
 		dRows.Scan(&hour, &needed)
 
-		assignedThisHour := make(map[int]bool) // Track who works THIS specific hour
-		seniorAssigned := false
+		assignedThisHour := make(map[int]bool)
 		slotsFilled := 0
 
-		// --- PASS 1: The "Safety" Mandate (Find 1 Senior) ---
+		// --- PASS 1: Safety (Senior) ---
 		for _, emp := range employees {
-			// Skip if already working max hours
-			if hoursWorked[emp.ID] >= MaxDailyHours {
-				continue
-			}
-			
-			// We only want a Senior here
+			if hoursWorked[emp.ID] >= MaxDailyHours { continue }
 			if emp.SkillLevel >= 2 {
-				// Assign the Senior
 				hoursWorked[emp.ID]++
-				totalCost += emp.HourlyRate
+				roster.TotalCost += emp.HourlyRate
+				roster.Assignments = append(roster.Assignments, models.Assignment{
+					Hour: hour, Employee: emp, IsSenior: true,
+				})
 				assignedThisHour[emp.ID] = true
-				seniorAssigned = true
 				slotsFilled++
-				break // We only need ONE senior to satisfy the safety rule
+				break 
 			}
 		}
 
-		if !seniorAssigned {
-			fmt.Printf("RISK ALERT: Hour %d has NO SENIOR available! (Safety Violation)\n", hour)
-		}
-
-		// --- PASS 2: Fill the rest (Cheapest bodies) ---
+		// --- PASS 2: Filler ---
 		if slotsFilled < needed {
 			for _, emp := range employees {
-				if slotsFilled >= needed {
-					break
-				}
-				// Skip if maxed out OR if already assigned in Pass 1
-				if hoursWorked[emp.ID] >= MaxDailyHours || assignedThisHour[emp.ID] {
-					continue
-				}
+				if slotsFilled >= needed { break }
+				if hoursWorked[emp.ID] >= MaxDailyHours || assignedThisHour[emp.ID] { continue }
 
-				// Assign
 				hoursWorked[emp.ID]++
-				totalCost += emp.HourlyRate
+				roster.TotalCost += emp.HourlyRate
+				roster.Assignments = append(roster.Assignments, models.Assignment{
+					Hour: hour, Employee: emp, IsSenior: false,
+				})
 				slotsFilled++
 			}
 		}
 
 		if slotsFilled < needed {
-			unassignedShifts += (needed - slotsFilled)
+			roster.Unfilled += (needed - slotsFilled)
 		}
 	}
 	dRows.Close()
 
-	fmt.Printf("Optimization Complete. Daily Cost: $%.2f\n", totalCost)
-	if unassignedShifts > 0 {
-		fmt.Printf("CRITICAL: %d shifts unfilled.\n", unassignedShifts)
-	}
+	return roster, nil
 }
-
