@@ -10,8 +10,12 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-func InitDB() (*sql.DB, error) {
-	db, err := sql.Open("sqlite", "shiftopt.db")
+func InitDB(dsn string) (*sql.DB, error) {
+	if dsn == "" {
+		dsn = "shiftopt.db" // Default to prod file
+	}
+	db, err := sql.Open("sqlite", dsn)
+
 	if err != nil {
 		return nil, err
 	}
