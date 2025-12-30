@@ -24,4 +24,7 @@ func main() {
 
 	// Strategy B: The Real World (Legal but expensive)
 	scheduler.RunConstrained(db)
+
+	// Strategy B+safety. The Safety Constraint (Max 8h + 1 Senior)
+	scheduler.RunSafeSchedule(db)
 }
