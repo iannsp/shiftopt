@@ -37,4 +37,10 @@ type Roster struct {
 	Unfilled    int
 }
 
-
+// Unavailability represents a blocked time slot
+type Unavailability struct {
+	EmployeeName string // The AI identifies the person by name
+	StartHour    int
+	EndHour      int
+	Reason       string
+}

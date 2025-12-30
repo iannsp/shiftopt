@@ -13,6 +13,22 @@ func RunSmartTetris(db *sql.DB) (*models.Roster, error) {
 	fmt.Println("\n--- Generating Smart Tetris Schedule (Penalty Scoring) ---")
 
 	// 1. Fetch Data
+ blocked := make(map[int]map[int]bool)
+    
+    uRows, _ := db.Query("SELECT employee_id, start_hour, end_hour FROM unavailability")
+    for uRows.Next() {
+        var empID, start, end int
+        uRows.Scan(&empID, &start, &end)
+        
+        if blocked[empID] == nil {
+            blocked[empID] = make(map[int]bool)
+        }
+        for h := start; h < end; h++ { // [start, end)
+            blocked[empID][h] = true
+        }
+    }
+    uRows.Close()
+
 	rows, _ := db.Query("SELECT id, name, hourly_rate, skill_level FROM employees")
 	var employees []models.Employee
 	for rows.Next() {
@@ -59,7 +75,18 @@ func RunSmartTetris(db *sql.DB) (*models.Roster, error) {
 			if shiftEnd[emp.ID] > hour {
 				// This person is working this hour
 				isSenior := (emp.SkillLevel >= 2)
-				
+             // 1. Hard Constraints
+            if activeStaff[emp.ID] { continue }
+            if hoursWorkedTotal[emp.ID]+MinBlock > MaxDaily { continue }
+            isBlocked := false
+            for b := 0; b < MinBlock; b++ {
+                if blocked[emp.ID][hour+b] {
+                    isBlocked = true
+                    break
+                }
+            }
+            if isBlocked { continue } 
+
 				roster.Assignments = append(roster.Assignments, models.Assignment{
 					Hour: hour, Employee: emp, IsSenior: isSenior,
 				})
