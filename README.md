@@ -52,9 +52,9 @@ We are following an evolutionary development path:
     - [x] Baseline "Greedy" Scheduler (Finding the minimum viable roster).
     - [x] Clean Architecture (`cmd/` vs `internal/`).
 
-- [ ] **Phase 2: The "Real" World (Constraints)**
+- [x] **Phase 2: The "Real" World (Constraints)**
     - [x] Implement hard constraints (e.g., "Max 8 hours/day", "Must have 1 Manager on site").
-    - [ ] Refactor algorithm to handle backtracking or penalty scoring.
+    - [x] Refactor algorithm to handle backtracking or penalty scoring.
 
 - [ ] **Phase 3: AI Integration**
     - [ ] LLM-based parser: Convert unstructured texts ("I can't work Friday") into structured DB constraints.
